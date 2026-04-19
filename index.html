@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pengingat Pribadi</title>
+    <!-- Tailwind CSS untuk Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom Scrollbar & Animations */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* Custom Toast */
+        #toast-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 90%;
+            max-width: 400px;
+        }
+        .toast {
+            background: #333;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+    <!-- Toast Container untuk Notifikasi UI (Fallback) -->
+    <div id="toast-container"></div>
+
+    <!-- LAYAR AUTENTIKASI (LOGIN/REGISTER) -->
+    <div id="auth-screen" class="hidden min-h-screen flex items-center justify-center p-4">
+        <div class="max-w-sm w-full bg-white rounded-3xl shadow-xl p-8 fade-in">
+            <div class="text-center mb-8">
+                <div class="bg-teal-100 text-teal-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="heart-pulse" class="w-8 h-8"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-slate-800" id="auth-title">Masuk Akun</h2>
+                <p class="text-slate-500 text-sm mt-1" id="auth-subtitle">Selamat datang kembali!</p>
+            </div>
+            
+            <form id="auth-form" class="space-y-4" onsubmit="handleAuth(event)">
+                <div id="name-field" class="hidden">
+                    <label class="block text-sm font-medium text-slate-500 mb-1">Nama Lengkap</label>
+                    <input type="text" id="reg-name" placeholder="Contoh: Budi Santoso" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 bg-slate-50 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-500 mb-1">Username</label>
+                    <input type="text" id="auth-username" required placeholder="budis123" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 bg-slate-50 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-500 mb-1">Password</label>
+                    <input type="password" id="auth-password" required placeholder="••••••••" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 bg-slate-50 outline-none transition">
+                </div>
+                <button type="submit" id="auth-btn" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 rounded-xl mt-4 shadow-md shadow-teal-200 transition">
+                    Masuk
+                </button>
+            </form>
+            
+            <div class="mt-6 text-center text-sm text-slate-500">
+                <span id="auth-switch-text">Belum punya akun?</span> 
+                <button onclick="toggleAuthMode()" id="auth-switch-btn" class="text-teal-600 font-semibold hover:underline transition">Daftar sekarang</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- APLIKASI UTAMA (Disembunyikan saat belum login) -->
+    <div id="main-app" class="hidden max-w-md mx-auto min-h-screen bg-white shadow-xl relative pb-20">
+        <!-- Header -->
+        <header class="bg-teal-600 text-white p-6 rounded-b-3xl shadow-md">
+            <div class="flex justify-between items-center mb-4">
+                <h1 class="text-2xl font-bold flex items-center gap-2">
+                    <i data-lucide="heart-pulse" class="w-6 h-6"></i>
+                    Pengingat Sehat
+                </h1>
+                <div class="flex items-center gap-2">
+                    <button id="btn-permission" onclick="requestNotificationPermission()" class="bg-teal-500 hover:bg-teal-400 p-2 rounded-full transition" title="Izinkan Notifikasi">
+                        <i data-lucide="bell-off" id="icon-permission" class="w-5 h-5"></i>
+                    </button>
+                    <button onclick="toggleProfile()" class="bg-teal-500 hover:bg-teal-400 p-2 rounded-full transition" title="Profil Pengguna">
+                        <i data-lucide="user" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+            <p class="text-teal-100 text-sm opacity-90">Halo, <span id="user-greeting" class="font-semibold">User</span>!</p>
+        </header>
+
+        <!-- Profil Modal -->
+        <div id="profile-modal" class="hidden absolute top-0 left-0 w-full h-full bg-slate-900/40 z-40 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div class="bg-white rounded-3xl p-6 w-full max-w-xs shadow-2xl fade-in relative">
+                <button onclick="toggleProfile()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+                <div class="text-center mb-6 mt-4">
+                    <div class="w-20 h-20 bg-teal-100 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-3 text-3xl font-bold uppercase" id="profile-avatar">
+                        U
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800" id="profile-name">User Name</h3>
+                    <p class="text-slate-500 text-sm" id="profile-username">@username</p>
+                </div>
+                <button onclick="logout()" class="w-full bg-red-50 hover:bg-red-100 text-red-600 font-semibold py-3 rounded-xl transition flex items-center justify-center gap-2">
+                    <i data-lucide="log-out" class="w-5 h-5"></i>
+                    Keluar Akun
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="p-6">
+            <!-- Form Tambah Pengingat -->
+            <div class="bg-white border border-slate-100 shadow-sm rounded-2xl p-5 mb-8 fade-in">
+                <h2 class="font-semibold text-lg mb-4 text-slate-700">Buat Pengingat Baru</h2>
+                
+                <div class="space-y-4">
+                    <!-- Kategori Cepat -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-500 mb-2">Kategori</label>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="setCategory('obat')" id="btn-cat-obat" class="flex-1 py-2 px-2 rounded-xl border-2 border-teal-500 bg-teal-50 text-teal-700 font-medium flex items-center justify-center gap-1 transition text-sm">
+                                <i data-lucide="pill" class="w-4 h-4"></i> Obat
+                            </button>
+                            <button type="button" onclick="setCategory('makan')" id="btn-cat-makan" class="flex-1 py-2 px-2 rounded-xl border-2 border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200 font-medium flex items-center justify-center gap-1 transition text-sm">
+                                <i data-lucide="utensils" class="w-4 h-4"></i> Makan
+                            </button>
+                            <button type="button" onclick="setCategory('lainnya')" id="btn-cat-lainnya" class="flex-1 py-2 px-2 rounded-xl border-2 border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200 font-medium flex items-center justify-center gap-1 transition text-sm">
+                                <i data-lucide="calendar" class="w-4 h-4"></i> Lainnya
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-500 mb-1">Detail Pengingat</label>
+                        <input type="text" id="input-text" placeholder="Contoh: Obat Paracetamol..." 
+                            class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition bg-slate-50">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-500 mb-1">Kapan?</label>
+                        <input type="datetime-local" id="input-time" 
+                            class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition bg-slate-50">
+                    </div>
+
+                    <button onclick="addReminder()" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 rounded-xl transition flex items-center justify-center gap-2 mt-2 shadow-md shadow-teal-200">
+                        <i data-lucide="plus-circle" class="w-5 h-5"></i>
+                        Tambah Pengingat
+                    </button>
+                </div>
+            </div>
+
+            <!-- Daftar Pengingat -->
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="font-semibold text-lg text-slate-700">Daftar Aktif</h2>
+                    <span id="badge-count" class="bg-teal-100 text-teal-700 text-xs font-bold px-2 py-1 rounded-full">0</span>
+                </div>
+                
+                <div id="reminder-list" class="space-y-3">
+                    <!-- Item akan dimuat di sini oleh JavaScript -->
+                    <div class="text-center text-slate-400 py-6 text-sm flex flex-col items-center">
+                        <i data-lucide="inbox" class="w-10 h-10 mb-2 opacity-50"></i>
+                        Belum ada pengingat.
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Fab Button Test Notification -->
+        <button onclick="testNotification()" class="absolute bottom-6 right-6 bg-slate-800 text-white p-4 rounded-full shadow-lg hover:bg-slate-700 transition flex items-center justify-center" title="Test Notifikasi">
+            <i data-lucide="smartphone" class="w-6 h-6"></i>
+        </button>
+    </div>
+
+    <script>
+        // Inisialisasi ikon Lucide
+        lucide.createIcons();
+
+        // --- SISTEM AUTENTIKASI (LOGIN/REGISTER) ---
+        let currentUser = JSON.parse(localStorage.getItem('healthCurrentUser')) || null;
+        let usersDB = JSON.parse(localStorage.getItem('healthUsersDB')) || [];
+        let isLoginMode = true;
+
+        function checkAuthStatus() {
+            const authScreen = document.getElementById('auth-screen');
+            const mainApp = document.getElementById('main-app');
+            
+            if (currentUser) {
+                // Sembunyikan layar login, tampilkan aplikasi utama
+                authScreen.classList.add('hidden');
+                mainApp.classList.remove('hidden');
+                
+                // Update UI Profil
+                document.getElementById('user-greeting').innerText = currentUser.name;
+                document.getElementById('profile-name').innerText = currentUser.name;
+                document.getElementById('profile-username').innerText = '@' + currentUser.username;
+                document.getElementById('profile-avatar').innerText = currentUser.name.charAt(0);
+                
+                // Load data pengingat spesifik untuk user ini
+                loadUserReminders();
+            } else {
+                // Tampilkan layar login
+                authScreen.classList.remove('hidden');
+                mainApp.classList.add('hidden');
+            }
+        }
+
+        function toggleAuthMode() {
+            isLoginMode = !isLoginMode;
+            document.getElementById('auth-title').innerText = isLoginMode ? 'Masuk Akun' : 'Buat Akun Baru';
+            document.getElementById('auth-subtitle').innerText = isLoginMode ? 'Selamat datang kembali!' : 'Mulai atur jadwal sehatmu.';
+            document.getElementById('auth-btn').innerText = isLoginMode ? 'Masuk' : 'Daftar Sekarang';
+            document.getElementById('auth-switch-text').innerText = isLoginMode ? 'Belum punya akun?' : 'Sudah punya akun?';
+            document.getElementById('auth-switch-btn').innerText = isLoginMode ? 'Daftar di sini' : 'Masuk di sini';
+            
+            const nameField = document.getElementById('name-field');
+            if (isLoginMode) {
+                nameField.classList.add('hidden');
+                document.getElementById('reg-name').removeAttribute('required');
+            } else {
+                nameField.classList.remove('hidden');
+                document.getElementById('reg-name').setAttribute('required', 'true');
+            }
+        }
+
+        function handleAuth(event) {
+            event.preventDefault();
+            const username = document.getElementById('auth-username').value.trim().toLowerCase();
+            const password = document.getElementById('auth-password').value;
+
+            if (isLoginMode) {
+                // Proses Login
+                const user = usersDB.find(u => u.username === username && u.password === password);
+                if (user) {
+                    currentUser = { name: user.name, username: user.username };
+                    localStorage.setItem('healthCurrentUser', JSON.stringify(currentUser));
+                    showToast("Berhasil masuk!", "success");
+                    document.getElementById('auth-form').reset();
+                    checkAuthStatus();
+                } else {
+                    showToast("Username atau Password salah!", "error");
+                }
+            } else {
+                // Proses Register
+                const name = document.getElementById('reg-name').value.trim();
+                const existingUser = usersDB.find(u => u.username === username);
+                if (existingUser) {
+                    showToast("Username sudah dipakai, pilih yang lain!", "error");
+                    return;
+                }
+                const newUser = { name, username, password };
+                usersDB.push(newUser);
+                localStorage.setItem('healthUsersDB', JSON.stringify(usersDB));
+                
+                // Langsung login setelah berhasil daftar
+                currentUser = { name: newUser.name, username: newUser.username };
+                localStorage.setItem('healthCurrentUser', JSON.stringify(currentUser));
+                showToast("Akun berhasil dibuat!", "success");
+                document.getElementById('auth-form').reset();
+                toggleAuthMode(); // Kembalikan form ke mode login secara default
+                checkAuthStatus();
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('healthCurrentUser');
+            
+            // Sembunyikan modal profil jika sedang terbuka
+            const modal = document.getElementById('profile-modal');
+            if (!modal.classList.contains('hidden')) {
+                modal.classList.add('hidden');
+            }
+            
+            showToast("Berhasil keluar.", "info");
+            checkAuthStatus();
+        }
+
+        function toggleProfile() {
+            const modal = document.getElementById('profile-modal');
+            modal.classList.toggle('hidden');
+        }
+
+        // State Penyimpanan
+        let reminders = []; // Akan diisi saat login berhasil
+        let permissionGranted = false;
+        let selectedCategory = 'obat';
+
+        function loadUserReminders() {
+            if (!currentUser) return;
+            const dbKey = 'healthReminders_' + currentUser.username;
+            reminders = JSON.parse(localStorage.getItem(dbKey)) || [];
+            renderReminders();
+        }
+
+        // Fungsi menyimpan ke Local Storage (Spesifik tiap akun/user)
+        function saveReminders() {
+            if (!currentUser) return;
+            const dbKey = 'healthReminders_' + currentUser.username;
+            localStorage.setItem(dbKey, JSON.stringify(reminders));
+        }
+
+        // Fungsi ubah kategori
+        function setCategory(category) {
+            selectedCategory = category;
+            
+            // Reset style semua tombol
+            ['obat', 'makan', 'lainnya'].forEach(c => {
+                const btn = document.getElementById('btn-cat-' + c);
+                btn.className = 'flex-1 py-2 px-2 rounded-xl border-2 border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200 font-medium flex items-center justify-center gap-1 transition text-sm';
+            });
+            
+            // Aktifkan tombol yang dipilih
+            const activeBtn = document.getElementById('btn-cat-' + category);
+            activeBtn.className = 'flex-1 py-2 px-2 rounded-xl border-2 border-teal-500 bg-teal-50 text-teal-700 font-medium flex items-center justify-center gap-1 transition text-sm';
+
+            // Ubah placeholder sesuai kategori
+            const inputTxt = document.getElementById('input-text');
+            if(category === 'obat') inputTxt.placeholder = 'Contoh: Obat Paracetamol...';
+            else if(category === 'makan') inputTxt.placeholder = 'Contoh: Makan Siang...';
+            else inputTxt.placeholder = 'Contoh: Olahraga, Rapat...';
+        }
+
+        // Set minimal waktu input ke waktu saat ini
+        const timeInput = document.getElementById('input-time');
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        timeInput.min = now.toISOString().slice(0,16);
+
+        // --- SISTEM NOTIFIKASI ---
+        
+        // Cek status izin notifikasi saat dimuat
+        function checkPermissionStatus() {
+            if (!("Notification" in window)) {
+                console.log("Browser tidak mendukung notifikasi web.");
+                return;
+            }
+            
+            const iconPermission = document.getElementById('icon-permission');
+            const btnPermission = document.getElementById('btn-permission');
+
+            if (Notification.permission === "granted") {
+                permissionGranted = true;
+                iconPermission.setAttribute('data-lucide', 'bell');
+                btnPermission.classList.remove('bg-teal-500');
+                btnPermission.classList.add('bg-green-500', 'hover:bg-green-400');
+                lucide.createIcons();
+            }
+        }
+
+        // Meminta izin notifikasi dari pengguna
+        function requestNotificationPermission() {
+            if (!("Notification" in window)) {
+                showToast("Browser Anda tidak mendukung fitur notifikasi.", "error");
+                return;
+            }
+
+            Notification.requestPermission().then((permission) => {
+                if (permission === "granted") {
+                    showToast("Notifikasi berhasil diaktifkan!", "success");
+                    checkPermissionStatus();
+                } else if (permission === "denied") {
+                    showToast("Izin notifikasi ditolak. Anda harus mengubahnya di pengaturan browser.", "error");
+                }
+            });
+        }
+
+        // Mengirim notifikasi
+        function sendNotification(title, body) {
+            // Jika diizinkan OS, kirim notifikasi sistem
+            if (permissionGranted) {
+                // Untuk HP, biasanya butuh getRegistration dan showNotification jika pakai service worker, 
+                // tapi API dasar ini cukup untuk beberapa browser mobile.
+                try {
+                    const options = {
+                        body: body,
+                        icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827370.png', // Icon lonceng
+                        vibrate: [200, 100, 200, 100, 200, 100, 200] // Getar di HP (jika didukung)
+                    };
+                    new Notification(title, options);
+                } catch (e) {
+                    console.log("Error sending native notification", e);
+                }
+            } 
+            // Selalu tampilkan toast di dalam aplikasi sebagai cadangan (fallback)
+            showToast(`⏰ Waktunya: ${body}`, "info");
+        }
+
+        // Test Notifikasi Button
+        function testNotification() {
+            if(!permissionGranted) {
+                requestNotificationPermission();
+            } else {
+                sendNotification("Test Berhasil!", "Notifikasi di HP Anda sudah berfungsi.");
+            }
+        }
+
+
+        // --- LOGIKA APLIKASI PENGINGAT ---
+
+        function addReminder() {
+            const textInput = document.getElementById('input-text').value;
+            const timeValue = document.getElementById('input-time').value;
+
+            if (!textInput || !timeValue) {
+                showToast("Harap isi nama pengingat dan waktunya!", "error");
+                return;
+            }
+
+            const reminderTime = new Date(timeValue).getTime();
+            const currentTime = new Date().getTime();
+
+            if (reminderTime <= currentTime) {
+                showToast("Waktu pengingat harus di masa depan!", "error");
+                return;
+            }
+
+            // Minta izin notifikasi jika belum (biasanya harus dipicu oleh klik user)
+            if (!permissionGranted && Notification.permission !== "denied") {
+                requestNotificationPermission();
+            }
+
+            const newReminder = {
+                id: Date.now().toString(),
+                text: textInput,
+                time: reminderTime,
+                type: selectedCategory,
+                notified: false
+            };
+
+            reminders.push(newReminder);
+            saveReminders(); // Simpan data ke memori browser
+            
+            // Bersihkan input
+            document.getElementById('input-text').value = '';
+            document.getElementById('input-time').value = '';
+            
+            showToast("Pengingat berhasil ditambahkan!", "success");
+            renderReminders();
+        }
+
+        function deleteReminder(id) {
+            reminders = reminders.filter(r => r.id !== id);
+            saveReminders(); // Perbarui memori browser setelah dihapus
+            renderReminders();
+        }
+
+        function renderReminders() {
+            const listContainer = document.getElementById('reminder-list');
+            const badgeCount = document.getElementById('badge-count');
+            
+            // Filter hanya yang belum dinotifikasi
+            const activeReminders = reminders.filter(r => !r.notified).sort((a,b) => a.time - b.time);
+            badgeCount.innerText = activeReminders.length;
+
+            if (activeReminders.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="text-center text-slate-400 py-6 text-sm flex flex-col items-center fade-in">
+                        <i data-lucide="inbox" class="w-10 h-10 mb-2 opacity-50"></i>
+                        Belum ada pengingat aktif.
+                    </div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            listContainer.innerHTML = '';
+            
+            activeReminders.forEach(reminder => {
+                const dateObj = new Date(reminder.time);
+                const timeString = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                const dateString = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+
+                // Tentukan ikon dan warna berdasarkan tipe
+                let iconName = 'clock';
+                let colorClass = 'text-slate-500 bg-slate-100';
+                
+                if (reminder.type === 'obat') {
+                    iconName = 'pill';
+                    colorClass = 'text-teal-600 bg-teal-100';
+                } else if (reminder.type === 'makan') {
+                    iconName = 'utensils';
+                    colorClass = 'text-orange-500 bg-orange-100';
+                }
+
+                const item = document.createElement('div');
+                item.className = 'bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between fade-in';
+                
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 rounded-lg ${colorClass}">
+                            <i data-lucide="${iconName}" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-slate-800 line-clamp-1">${reminder.text}</h3>
+                            <p class="text-xs text-slate-500 mt-0.5">${dateString}, ${timeString}</p>
+                        </div>
+                    </div>
+                    <button onclick="deleteReminder('${reminder.id}')" class="text-slate-300 hover:text-red-500 transition p-2" title="Hapus">
+                        <i data-lucide="trash-2" class="w-5 h-5"></i>
+                    </button>
+                `;
+                listContainer.appendChild(item);
+            });
+
+            lucide.createIcons();
+        }
+
+        // --- ENGINE PENGECEKAN WAKTU (Berjalan setiap detik) ---
+        setInterval(() => {
+            const now = new Date().getTime();
+            let needRender = false;
+            let needSave = false;
+
+            reminders.forEach(reminder => {
+                // Jika waktunya sudah tiba dan belum pernah dinotifikasi
+                if (!reminder.notified && reminder.time <= now) {
+                    reminder.notified = true;
+                    needRender = true;
+                    needSave = true;
+                    sendNotification("Pengingat Sehat", reminder.text);
+                }
+            });
+
+            if (needSave) {
+                saveReminders(); // Simpan status "sudah dinotifikasi"
+            }
+
+            if (needRender) {
+                renderReminders();
+            }
+        }, 1000); // Cek setiap 1 detik
+
+
+        // --- CUSTOM TOAST UI ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            
+            let icon = 'info';
+            if(type === 'success') icon = 'check-circle';
+            if(type === 'error') icon = 'alert-triangle';
+
+            toast.innerHTML = `
+                <div class="flex items-center gap-2 text-sm">
+                    <i data-lucide="${icon}" class="w-5 h-5 ${type === 'success' ? 'text-green-400' : type === 'error' ? 'text-red-400' : 'text-blue-400'}"></i>
+                    ${message}
+                </div>
+            `;
+            
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            // Hapus toast setelah 4 detik
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(10px)';
+                toast.style.transition = 'all 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Inisialisasi awal
+        checkPermissionStatus();
+        checkAuthStatus(); // Cek status login saat halaman dimuat
+
+    </script>
+</body>
+</html>
